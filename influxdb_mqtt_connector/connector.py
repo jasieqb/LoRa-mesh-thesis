@@ -15,6 +15,7 @@ logging.basicConfig(
     level=logging.INFO,
     datefmt='%Y-%m-%d %H:%M:%S')
 
+
 def parse_json_message(msg) -> dict | None:
     """
     This method is used to parse json message to dict.
@@ -50,14 +51,13 @@ class Connector:
         :param mqtt_password:
         :param influxdb_host:
         :param influxdb_token:
-        :param influxdb_org: 
+        :param influxdb_org:
         :param influxdb_port: default 8086
         :param mqtt_port: default 1883
         """
         self.mqtt_host = mqtt_host
         self.mqtt_port = mqtt_port
         self.mqtt_topic = mqtt_topic
-
 
         self.influxdb_host = influxdb_host
         self.influxdb_port = influxdb_port
@@ -79,19 +79,23 @@ class Connector:
         self.mqtt_client.reconnect_delay_set(min_delay=1, max_delay=120)
         self.mqtt_client.on_disconnect = self.reconnect_if_needed
 
-        self.redis_client = redis.Redis(host=redis_host, port=redis_port, db=redis_db, password=redis_password)
+        self.redis_client = redis.Redis(
+            host=redis_host, port=redis_port, db=redis_db, password=redis_password)
 
         self.REDIS_EXPIRE = redis_expire
 
     def on_connect(self, client, userdata, msg, rc):
-        logging.log(logging.INFO, "Connected to mqtt with result code " + str(rc))
+        logging.log(
+            logging.INFO, "Connected to mqtt with result code " + str(rc))
         client.subscribe(self.mqtt_topic)
 
     def on_message(self, client, userdata, msg):
         try:
-            logging.log(logging.INFO, "Received message: " + msg.payload.decode("utf-8"))
+            logging.log(logging.INFO, "Received message: " +
+                        msg.payload.decode("utf-8"))
         except UnicodeDecodeError:
-            logging.log(logging.WARN, "Received message: " + msg.payload.decode("utf-8", "ignore"))
+            logging.log(logging.WARN, "Received message: " +
+                        msg.payload.decode("utf-8", "ignore"))
 
         self.process_message(msg)
 
@@ -115,16 +119,17 @@ class Connector:
     def save_to_influxdb(self, json_msg):
         write_api = self.influxdb_client.write_api(write_options=SYNCHRONOUS)
         for key, value in json_msg["values"].items():
-            point = Point(key).tag("device", json_msg["d_id"]).field("value", value)
+            point = Point(key).tag(
+                "device", json_msg["d_id"]).field("value", value)
             write_api.write(bucket=self.influxdb_bucket, record=point)
 
-
     def save_to_redis(self, json_msg):
-        self.redis_client.set(json_msg["m_id"], "PROCESSED", ex=self.REDIS_EXPIRE)
+        self.redis_client.set(
+            json_msg["m_id"], "PROCESSED", ex=self.REDIS_EXPIRE)
 
     def process_message(self, msg):
         json_msg = parse_json_message(msg)
-        if json_msg and  self.valide_message(json_msg) and not self.check_if_processed(json_msg["m_id"]):
+        if json_msg and self.valide_message(json_msg) and not self.check_if_processed(json_msg["m_id"]):
             self.save_to_redis(json_msg)
             self.save_to_influxdb(json_msg)
 
@@ -135,7 +140,7 @@ class Connector:
         if "m_id" not in json_msg:
             return False
 
-        if "values" not in json_msg and json_msg["values"] is dict:
+        if "values" not in json_msg or not isinstance(json_msg["values"], dict):
             return False
 
         if "ttl" not in json_msg:
@@ -154,14 +159,11 @@ class Connector:
             logging.log(logging.INFO, "Message already processed")
             return True
         return False
-    
 
     def reconnect_if_needed(self):
         if not self.mqtt_client.is_connected():
             logging.log(logging.INFO, "Reconnecting to mqtt")
             self.mqtt_client.reconnect()
-        
-
 
 
 if __name__ == "__main__":
@@ -170,14 +172,14 @@ if __name__ == "__main__":
 
     connector = Connector(mqtt_host=os.getenv("MQTT_HOST", "mqtt"),
                           mqtt_port=os.getenv("MQTT_PORT", 1883),
-                          mqtt_user=os.getenv("MQTT_USER", "test"), 
+                          mqtt_user=os.getenv("MQTT_USER", "test"),
                           mqtt_topic=os.getenv("MQTT_TOPIC", "test"),
                           mqtt_password=os.getenv("MQTT_PASSWORD", "test")
-                          influxdb_host=os.getenv("INFLUXDB_HOST", "influxdb"), 
+                          influxdb_host=os.getenv("INFLUXDB_HOST", "influxdb"),
                           influxdb_port=os.getenv("INFLUXDB_PORT", 8086),
                           influxdb_token=os.getenv("DB_TOKEN"),
-                          influxdb_org=os.getenv("DB_ORG", "test"), 
-                          redis_host=os.getenv("REDIS_HOST", "redis"), 
+                          influxdb_org=os.getenv("DB_ORG", "test"),
+                          redis_host=os.getenv("REDIS_HOST", "redis"),
                           influxdb_bucket=os.getenv("DB_BUCKET", "test"))
     connector.start()
     while True:
