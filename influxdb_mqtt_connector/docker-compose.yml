@@ -1,0 +1,68 @@
+services:
+  influxdb:
+    image: influxdb:latest
+    container_name: influxdb
+    ports:
+      - 8086:8086
+    volumes:
+      - ./influxdb_data:/var/lib/influxdb2
+    #      - ./influxdb_config:/etc/influxdb2
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=
+      - DOCKER_INFLUXDB_INIT_ORG=test
+      - DOCKER_INFLUXDB_INIT_BUCKET=test
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=
+    restart: unless-stopped
+    healthcheck:
+      test: "curl -f http://localhost:8086/ping"
+      interval: 5s
+      timeout: 10s
+      retries: 5
+
+  redis:
+    image: bitnami/redis:7.0
+    container_name: redis
+    environment:
+      # ALLOW_EMPTY_PASSWORD is recommended only for development.
+      - ALLOW_EMPTY_PASSWORD=yes
+      - REDIS_DISABLE_COMMANDS=FLUSHDB,FLUSHALL
+    ports:
+      - '6379:6379'
+    volumes:
+      - './redis_data:/bitnami/redis/data'
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 10s
+      retries: 3
+
+  connector:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: connector
+    environment:
+      - DB_TOKEN=
+      - DB_ORG=test
+      - DB_BUCKET=test
+      - MQTT_HOST=
+      - MQTT_PORT=
+      - MQTT_USER=
+      - MQTT_PASS=
+      - MQTT_TOPIC=
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASS=redis
+      - REDIS_DB=0
+      - INFLUXDB_HOST=influxdb
+      - INFLUXDB_PORT=8086
+    volumes:
+      - .:/app
+    depends_on:
+      influxdb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
