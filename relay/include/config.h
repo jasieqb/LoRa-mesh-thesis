@@ -1,0 +1,6 @@
+#define mySSID ""
+#define myPASS ""
+#define MQTT_ID ""
+#define MQTT_SERVER ""
+#define MQTT_USER ""
+#define MQTT_PASS ""
